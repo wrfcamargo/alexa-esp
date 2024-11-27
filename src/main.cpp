@@ -1,113 +1,96 @@
-#include <Arduino.h>
-#include "fauxmoESP.h"
+/*
+ * Simple example for how to use multiple SinricPro Switch device:
+ * - setup 4 switch devices
+ * - handle request using multiple callbacks
+ * 
+ * If you encounter any issues:
+ * - check the readme.md at https://github.com/sinricpro/esp8266-esp32-sdk/blob/master/README.md
+ * - ensure all dependent libraries are installed
+ *   - see https://github.com/sinricpro/esp8266-esp32-sdk/blob/master/README.md#arduinoide
+ *   - see https://github.com/sinricpro/esp8266-esp32-sdk/blob/master/README.md#dependencies
+ * - open serial monitor and check whats happening
+ * - check full user documentation at https://sinricpro.github.io/esp8266-esp32-sdk
+ * - visit https://github.com/sinricpro/esp8266-esp32-sdk/issues and check for existing issues or open a new one
+ */
 
-#ifdef ESP32
-    #include <WiFi.h>
-    #define RELAY_PIN_1 12
-    #define RELAY_PIN_2 14
-#else
-    #define RELAY_PIN_1 5
-    #define RELAY_PIN_2 4
+#ifdef ENABLE_DEBUG
+   #define DEBUG_ESP_PORT Serial
+   #define NODEBUG_WEBSOCKETS
+   #define NDEBUG
 #endif
 
-#define SERIAL_BAUDRATE 115200
+#include <Arduino.h>
+#if defined(ESP8266)
+  #include <ESP8266WiFi.h>
+#elif defined(ESP32) || defined(ARDUINO_ARCH_RP2040)
+  #include <WiFi.h>
+#endif
 
-#define WIFI_SSID "House_Bennett_WGO_Fibra"
-#define WIFI_PASS "joaopedropreguicinha"
+#include "SinricPro.h"
+#include "SinricProSwitch.h"
 
-#define TOM "Tv"
-#define LAMP "Lâmpada 1"
+#define WIFI_SSID         "Camargo 2.4G"
+#define WIFI_PASS         "AW12012019"
+#define APP_KEY           "9c1b45d6-86f1-48b1-96e6-5ddfffa811e8"
+#define APP_SECRET        "470af8d5-ef5f-41ff-bd25-aefa6322d1d0-0d55eff4-05e0-4292-8768-5298126c1bcc"
 
-// --------------------------------------------------------------------------------------------- //
+#define SWITCH_ID_1       "674676c68916d6b80a231abc"
+#define RELAYPIN_1        1
 
-static void wifiSetup(void);
+#define BAUD_RATE         115200
 
-// --------------------------------------------------------------------------------------------- //
-
-fauxmoESP fauxmo;
-
-static void wifiSetup(void)
+bool onPowerState1(const String &deviceId, bool &state)
 {
-    //Define o como STA
-    WiFi.mode(WIFI_STA);
+    Serial.printf("Device 1 turned %s\r\n", state ? "on" : "off");
+    // digitalWrite(RELAYPIN_1, state ? HIGH:LOW);
+    return true;
+}
 
-    Serial.printf("[WIFI] Conectado ao %s", WIFI_SSID);
+void setupWiFi()
+{
+    Serial.println("[Wifi]: Connecting");
+
+    #if defined(ESP8266)
+        WiFi.setSleepMode(WIFI_NONE_SLEEP); 
+        WiFi.setAutoReconnect(true);
+    #elif defined(ESP32)
+        WiFi.setSleep(false); 
+        WiFi.setAutoReconnect(true);
+    #endif
+
     WiFi.begin(WIFI_SSID, WIFI_PASS);
 
     while (WiFi.status() != WL_CONNECTED)
     {
         Serial.print(".");
-        delay(100);
+        delay(1000);
     }
 
-    Serial.printf("\n[WIFI] STATION Mode, SSID: %s, IP address: %s\n", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
+    Serial.printf("connected!\r\n[WiFi]: IP-Address is %s\r\n", WiFi.localIP().toString().c_str());
 }
 
-void setup(void)
+void setupSinricPro(void)
 {
-    Serial.begin(SERIAL_BAUDRATE);
-    Serial.println();
+    // pinMode(RELAYPIN_1, OUTPUT);
 
-    wifiSetup();
+    SinricProSwitch& mySwitch1 = SinricPro[SWITCH_ID_1];
+    mySwitch1.onPowerState(onPowerState1);
 
-    //Dispositivos a serem ligados
-    pinMode(RELAY_PIN_1, OUTPUT);
-    digitalWrite(RELAY_PIN_1, HIGH);
+    SinricPro.onConnected([](){ Serial.print("Connected to SinricPro\r\n"); });
+    SinricPro.onDisconnected([](){ Serial.print("Disconnected from SinricPro\r\n"); });
 
-    pinMode(RELAY_PIN_2, OUTPUT);
-    digitalWrite(RELAY_PIN_2,HIGH);
-
-    // Por padrão, fauxmoESP cria seu próprio servidor web na porta definida
-    // A porta TCP deve ser 80 para dispositivos gen3 (o padrão é 1901)
-    // Isso deve ser feito antes da chamada enable()
-    fauxmo.createServer(true); // Cria o servidor
-    fauxmo.setPort(80); // Necessário para os dispositivos gen3
-
-    // Você deve chamar enable(true) assim que tiver uma conexão WiFi
-    // Você pode ativar ou desativar a biblioteca a qualquer momento
-    // Desativá-lo impedirá que os dispositivos sejam descobertos e trocados
-    fauxmo.enable(true);
-
-    // Você pode usar diferentes maneiras de chamar a Alexa para modificar o estado dos dispositivos:
-    // "Alexa, ligar Ventilador"
-
-    // Adiciona os dispositivos 
-    fauxmo.addDevice(TOM);
-    fauxmo.addDevice(LAMP);
-
-    fauxmo.onSetState([](unsigned char device_id, const char * device_name, bool state, unsigned char value)
-    {
-        // Retorno de chamada quando um comando da Alexa é recebido.
-        // Você pode usar device_id ou device_name para escolher o elemento no qual realizar uma ação (relé, LED, ...)
-        // O state é um booleano (ON / OFF) e value um número de 0 a 255 (se você disser "definir a luz da cozinha para 50%", receberá 128 aqui).
-
-        Serial.printf("[MAIN] Device #%d (%s) state: %s value: %d\n", device_id, device_name, state ? "ON" : "OFF", value);
-
-        if (strcmp(device_name, TOM) == 0)
-        {
-            Serial.println("RELAY 1 switched by Alexa");
-            digitalWrite(RELAY_PIN_1, state ? LOW : HIGH);
-        }
-
-        if (strcmp(device_name, LAMP) == 0)
-        {
-            Serial.println("RELAY 2 switched by Alexa");
-            digitalWrite(RELAY_PIN_2, state ? LOW : HIGH);
-        }
-    });
+    SinricPro.begin(APP_KEY, APP_SECRET);
 }
 
-void loop(void)
+void setup()
 {
-    static unsigned long last = millis();
+    Serial.begin(BAUD_RATE);
+    Serial.print("\r\n\r\n");
+    setupWiFi();
+    setupSinricPro();
+}
 
-    // fauxmoESP usa um servidor TCP assíncrono, mas um servidor UDP sincronizado
-    // Portanto, temos que pesquisar manualmente os pacotes UDP
-    fauxmo.handle();
-
-    if ((millis() - last) > 5000)
-    {
-        last = millis();
-        Serial.printf("[MAIN] Free heap: %d bytes\n", ESP.getFreeHeap());
-    }
+void loop()
+{
+    SinricPro.handle();
 }
