@@ -1,6 +1,0 @@
-[submodule "lib/fauxmoesp"]
-	path = lib/fauxmoesp
-	url = https://bitbucket.org/xoseperez/fauxmoesp.git
-[submodule "lib/ESPAsyncTCP"]
-	path = lib/ESPAsyncTCP
-	url = https://github.com/me-no-dev/ESPAsyncTCP.git
