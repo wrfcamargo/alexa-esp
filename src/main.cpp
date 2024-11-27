@@ -35,14 +35,21 @@
 #define APP_SECRET        "470af8d5-ef5f-41ff-bd25-aefa6322d1d0-0d55eff4-05e0-4292-8768-5298126c1bcc"
 
 #define SWITCH_ID_1       "674676c68916d6b80a231abc"
-#define RELAYPIN_1        1
 
-#define BAUD_RATE         115200
+#define RELAY_PIN_1         14
+#define RELAY_PIN_2         16
+#define RELAY_ON            LOW
+#define RELAY_OFF           HIGH
+
+#define SERIAL_BAUD_RATE         115200
 
 bool onPowerState1(const String &deviceId, bool &state)
 {
     Serial.printf("Device 1 turned %s\r\n", state ? "on" : "off");
-    // digitalWrite(RELAYPIN_1, state ? HIGH:LOW);
+
+    digitalWrite(RELAY_PIN_1, state ? RELAY_ON : RELAY_OFF);
+    digitalWrite(RELAY_PIN_2, state ? RELAY_ON : RELAY_OFF);
+
     return true;
 }
 
@@ -71,9 +78,8 @@ void setupWiFi()
 
 void setupSinricPro(void)
 {
-    // pinMode(RELAYPIN_1, OUTPUT);
-
     SinricProSwitch& mySwitch1 = SinricPro[SWITCH_ID_1];
+
     mySwitch1.onPowerState(onPowerState1);
 
     SinricPro.onConnected([](){ Serial.print("Connected to SinricPro\r\n"); });
@@ -84,8 +90,12 @@ void setupSinricPro(void)
 
 void setup()
 {
-    Serial.begin(BAUD_RATE);
+    Serial.begin(SERIAL_BAUD_RATE);
     Serial.print("\r\n\r\n");
+
+    pinMode(RELAY_PIN_1, OUTPUT);
+    pinMode(RELAY_PIN_2, OUTPUT);
+
     setupWiFi();
     setupSinricPro();
 }
