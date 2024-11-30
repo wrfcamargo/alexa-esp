@@ -95,6 +95,8 @@ void setup()
 
     pinMode(RELAY_PIN_1, OUTPUT);
     pinMode(RELAY_PIN_2, OUTPUT);
+    digitalWrite(RELAY_PIN_1, RELAY_OFF);
+    digitalWrite(RELAY_PIN_2, RELAY_OFF);
 
     setupWiFi();
     setupSinricPro();
